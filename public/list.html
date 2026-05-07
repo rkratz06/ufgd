@@ -1,21 +1,118 @@
 <!DOCTYPE html>
-<html lang="en-us">
-	<head>
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<link rel="stylesheet" href="style.css" />
-	</head>
-	<body>
-		<nav id="navbar">
-			<table>
-				<tr>
-					<span id="logo">UFGD</span>
-					<div id="nav-opts">
-						<span class="nav-opt">List</span>
-						<span class="nav-opt">Levels</span>
-						<span class="nav-opt">FAQ</span>
-					</div>
-				</tr>
-			</table>
-		</nav>
-	</body>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="style.css"/>
+<title>List</title>
+</head>
+
+<body class="list-page">
+
+<nav class="navbar">
+    <div class="logo">UFGD</div>
+
+    <div class="nav-links">
+        <a href="/">Home</a>
+        <a href="/list.html">List</a>
+        <a href="/levels.html">Levels</a>
+        <a href="/FAQ.html">FAQ</a>
+    </div>
+</nav>
+
+<div class="list-container">
+
+    <div id="list-panel"></div>
+
+    <div id="detail-panel">
+        <div class="placeholder">
+            Click a level to view details
+        </div>
+    </div>
+
+</div>
+
+<script>
+
+let levelsCache = [];
+
+/* =========================
+   LOAD LEVELS
+========================= */
+async function loadLevels() {
+
+    const res =
+        await fetch("/levels?limit=100");
+
+    levelsCache =
+        await res.json();
+
+    const listPanel =
+        document.getElementById("list-panel");
+
+    listPanel.innerHTML = "";
+
+    levelsCache.forEach(level => {
+
+        const div =
+            document.createElement("div");
+
+        div.className = "list-item";
+
+        div.innerText =
+            `${level.position}. ${level.name}`;
+
+        div.onclick =
+            () => showDetails(level, div);
+
+        listPanel.appendChild(div);
+    });
+}
+
+/* =========================
+   SHOW DETAILS
+========================= */
+function showDetails(level, element) {
+
+    // highlight active
+    document.querySelectorAll(".list-item")
+        .forEach(el => el.classList.remove("active"));
+
+    element.classList.add("active");
+
+    const panel =
+        document.getElementById("detail-panel");
+
+    panel.innerHTML = `
+        <div class="title">${level.name}</div>
+
+        <div class="sub">
+            Position: ${level.position} <br>
+            Points: ${level.points.toFixed(2)}
+        </div>
+
+        <div class="box">
+            <strong>Victors</strong><br><br>
+            ${
+                level.victors.length
+                ? level.victors.join(", ")
+                : "None yet"
+            }
+        </div>
+
+        <div class="box">
+            <strong>Future Info Section</strong><br>
+            (You can expand this later with stats, history, etc.)
+        </div>
+    `;
+}
+
+/* =========================
+   INIT
+========================= */
+loadLevels();
+
+</script>
+
+</body>
 </html>

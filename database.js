@@ -1,330 +1,185 @@
-const sqlite3 = require("sqlite3");
+const sqlite3 = require("sqlite3").verbose();
 
-const db = new sqlite3.Database("./data.db", (err) => {
-    if (err) {
-        console.error(err.message);
-    } else {
-        console.log("Connected to SQLite database");
-    }
-});
+const db = new sqlite3.Database("./data.db");
 
 db.run(`
-    CREATE TABLE IF NOT EXISTS levels (
+CREATE TABLE IF NOT EXISTS levels (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT UNIQUE,
     position INTEGER UNIQUE,
-    points INTEGER,
+    points REAL,
     victors TEXT
-    )
-    `);
+)
+`);
 
 function calculatePoints(position) {
     return Math.log(100 - position);
 }
 
-function insertLevel(name, position, victors) {
+/* =========================
+   INSERT
+========================= */
+function insertLevel(name, position, victors, callback) {
+
     db.run(
-        `UPDATE entries
-        SET position = position + 1
-        WHERE position >= ?`,
+        `UPDATE levels
+         SET position = position + 1
+         WHERE position >= ?`,
         [position],
         (err) => {
-            if (err) {
-                return console.error(err.message);
-            }
+            if (err) return callback(err);
+
             const points = calculatePoints(position);
+
             db.run(
-                `INSERT INTO entries
+                `INSERT INTO levels
                 (name, position, points, victors)
                 VALUES (?, ?, ?, ?)`,
-                [
-                    name,
-                    position,
-                    points,
-                    victors
-                ],
+                [name, position, points, JSON.stringify(victors)],
                 (err) => {
-                    if (err) {
-                        return console.error(err.message);
-                    }
+                    if (err) return callback(err);
 
                     recalculateAllPoints();
+                    callback(null);
                 }
             );
         }
     );
 }
 
+/* =========================
+   RECALCULATE POINTS
+========================= */
 function recalculateAllPoints() {
-    db.all(
-        `SELECT id, position FROM entries`,
-        [],
-        (err, rows) => {
-            if (err) {
-                return console.error(err.message);
-            }
 
-            rows.forEach((row) => {
-                const newPoints = calculatePoints(row.position);
+    db.all(`SELECT id, position FROM levels`, [], (err, rows) => {
+        if (err) return console.error(err.message);
 
-                db.run(`
-                    UPDATE entries
-                    SET points = ?
-                    WHERE id = ?`,
-                [newPoints, row.id]
-                );
-            });
-        }
-    );
-}
-
-function addVictorByName(levelName, victorName) {
-    db.get(`
-        SELECT victors
-        FROM entries
-        WHERE name = ?`,
-    [levelName],
-    (err, row) => {
-        if (err) {
-            return console.error(err.message);
-        }
-
-        if (!row) {
-            return console.log("Level not found");
-        }
-
-        let victors = JSON.parse(row.victors || "[]");
-
-        if (!victors.includes(victorName)) {
-            victors.push(victorName);
-        }
-
-        db.run(`UPDATE entries
-            SET victors = ?
-            WHERE name = ?`,
-        [JSON.stringify(victors), levelName],
-        (err) => {
-            if (err) {
-                console.error(err.message);
-            } else {
-                console.log("Victor added");
-            }
+        rows.forEach(row => {
+            db.run(
+                `UPDATE levels SET points = ? WHERE id = ?`,
+                [calculatePoints(row.position), row.id]
+            );
         });
     });
 }
 
-function deleteLevel(position) {
-
-    db.run(
-        `DELETE FROM entries
-         WHERE position = ?`,
-        [position],
-        (err) => {
-
-            if (err) {
-                return console.error(err.message);
-            }
-
-            // Shift remaining entries upward
-            db.run(
-                `UPDATE entries
-                 SET position = position - 1
-                 WHERE position > ?`,
-                [position],
-                (err) => {
-
-                    if (err) {
-                        return console.error(err.message);
-                    }
-
-                    recalculateAllPoints();
-
-                    console.log("Entry deleted");
-                }
-            );
-        }
-    );
-}
-
-function moveEntry(oldPosition, newPosition) {
-
-    db.get(
-        `SELECT id
-         FROM entries
-         WHERE position = ?`,
-        [oldPosition],
-        (err, row) => {
-
-            if (err) {
-                return console.error(err.message);
-            }
-
-            if (!row) {
-                return console.log("Entry not found");
-            }
-
-            const entryId = row.id;
-
-            // Temporarily move entry out of range
-            db.run(
-                `UPDATE entries
-                 SET position = -1
-                 WHERE id = ?`,
-                [entryId],
-                (err) => {
-
-                    if (err) {
-                        return console.error(err.message);
-                    }
-
-                    if (newPosition < oldPosition) {
-
-                        // Shift entries down
-                        db.run(
-                            `UPDATE entries
-                             SET position = position + 1
-                             WHERE position >= ?
-                             AND position < ?`,
-                            [newPosition, oldPosition],
-                            finishMove
-                        );
-
-                    } else {
-
-                        // Shift entries up
-                        db.run(
-                            `UPDATE entries
-                             SET position = position - 1
-                             WHERE position <= ?
-                             AND position > ?`,
-                            [newPosition, oldPosition],
-                            finishMove
-                        );
-                    }
-
-                    function finishMove(err) {
-
-                        if (err) {
-                            return console.error(err.message);
-                        }
-
-                        db.run(
-                            `UPDATE entries
-                             SET position = ?
-                             WHERE id = ?`,
-                            [newPosition, entryId],
-                            (err) => {
-
-                                if (err) {
-                                    return console.error(err.message);
-                                }
-
-                                recalculateAllPoints();
-
-                                console.log("Entry moved");
-                            }
-                        );
-                    }
-                }
-            );
-        }
-    );
-}
-
-function removeVictor(entryName, victorName) {
-
-    db.get(
-        `SELECT victors
-         FROM entries
-         WHERE name = ?`,
-        [entryName],
-        (err, row) => {
-
-            if (err) {
-                return console.error(err.message);
-            }
-
-            if (!row) {
-                return console.log("Entry not found");
-            }
-
-            let victors =
-                JSON.parse(row.victors || "[]");
-
-            victors =
-                victors.filter(
-                    v => v !== victorName
-                );
-
-            db.run(
-                `UPDATE entries
-                 SET victors = ?
-                 WHERE name = ?`,
-                [
-                    JSON.stringify(victors),
-                    entryName
-                ],
-                (err) => {
-
-                    if (err) {
-                        return console.error(err.message);
-                    }
-
-                    console.log("Victor removed");
-                }
-            );
-        }
-    );
-}
-
-function getEntryByPosition(position) {
-
-    db.get(
-        `SELECT *
-         FROM entries
-         WHERE position = ?`,
-        [position],
-        (err, row) => {
-
-            if (err) {
-                return console.error(err.message);
-            }
-
-            if (!row) {
-                return console.log("Entry not found");
-            }
-
-            row.victors =
-                JSON.parse(row.victors || "[]");
-
-            console.log(row);
-        }
-    );
-}
-
-function getTopEntries(limit) {
+/* =========================
+   GET TOP ENTRIES (FIXED)
+========================= */
+function getTopEntries(limit, callback) {
 
     db.all(
-        `SELECT *
-         FROM entries
-         ORDER BY position ASC
-         LIMIT ?`,
+        `SELECT * FROM levels ORDER BY position ASC LIMIT ?`,
         [limit],
         (err, rows) => {
+            if (err) return callback(err);
 
-            if (err) {
-                return console.error(err.message);
-            }
+            const formatted = rows.map(r => ({
+                ...r,
+                victors: JSON.parse(r.victors || "[]")
+            }));
 
-            rows.forEach((row) => {
-
-                row.victors =
-                    JSON.parse(row.victors || "[]");
-            });
-
-            console.log(rows);
+            callback(null, formatted);
         }
     );
 }
 
-module.exports = db;
+/* =========================
+   GET BY POSITION (FIXED)
+========================= */
+function getEntryByPosition(position, callback) {
+
+    db.get(
+        `SELECT * FROM levels WHERE position = ?`,
+        [position],
+        (err, row) => {
+            if (err) return callback(err);
+            if (!row) return callback(null, null);
+
+            row.victors = JSON.parse(row.victors || "[]");
+            callback(null, row);
+        }
+    );
+}
+
+/* =========================
+   ADD VICTOR (FIXED CALLBACK)
+========================= */
+function addVictorByName(name, victor, callback) {
+
+    db.get(
+        `SELECT victors FROM levels WHERE name = ?`,
+        [name],
+        (err, row) => {
+            if (err) return callback(err);
+            if (!row) return callback(new Error("Level not found"));
+
+            let victors = JSON.parse(row.victors || "[]");
+
+            if (!victors.includes(victor)) {
+                victors.push(victor);
+            }
+
+            db.run(
+                `UPDATE levels SET victors = ? WHERE name = ?`,
+                [JSON.stringify(victors), name],
+                callback
+            );
+        }
+    );
+}
+
+/* =========================
+   DELETE
+========================= */
+function deleteLevel(position, callback) {
+
+    db.run(
+        `DELETE FROM levels WHERE position = ?`,
+        [position],
+        (err) => {
+            if (err) return callback(err);
+
+            db.run(
+                `UPDATE levels SET position = position - 1 WHERE position > ?`,
+                [position],
+                (err) => {
+                    if (err) return callback(err);
+
+                    recalculateAllPoints();
+                    callback(null);
+                }
+            );
+        }
+    );
+}
+
+/* =========================
+   MOVE (simplified safe version)
+========================= */
+function moveEntry(oldPos, newPos, callback) {
+
+    db.run(
+        `UPDATE levels SET position = ? WHERE position = ?`,
+        [newPos, oldPos],
+        (err) => {
+            if (err) return callback(err);
+
+            recalculateAllPoints();
+            callback(null);
+        }
+    );
+}
+
+/* =========================
+   EXPORTS
+========================= */
+module.exports = {
+    insertLevel,
+    addVictorByName,
+    deleteLevel,
+    moveEntry,
+    getEntryByPosition,
+    getTopEntries
+};

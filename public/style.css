@@ -1,1 +1,78 @@
+/*style.css*/
+body {
+    font-family: Arial, sans-serif;
+    background-color: #111;
+    color: white;
+    margin: 0;
+}
+.navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #1a1a1a;
+    padding: 15px 25px;
+    border-bottom: 2px solid #333;
+}
 
+.logo {
+    font-size: 28px;
+    font-weight: bold;
+    color: gold;
+}
+
+.nav-links {
+    display: flex;
+    gap: 20px;
+}
+
+.nav-links a {
+    color: white;
+    text-decoration: none;
+    font-size: 18px;
+    transition: 0.2s;
+}
+
+.nav-links a:hover {
+    color: #6cf;
+}
+
+.page {
+    padding: 20px;
+}
+
+/* page wrapper */
+.list-page {
+    margin: 0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* content under navbar */
+.list-container {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+#list-panel {
+    width: 280px;
+    background: #1b1b1b;
+    overflow-y: auto;
+    border-right: 2px solid #333;
+}
+
+#detail-panel {
+    flex: 1;
+    padding: 30px;
+    overflow-y: auto;
+    transition: all 0.2s ease;
+}
+
+.list-item {
+    cursor: pointer;
+}
+
+.list-item.active {
+    background: #444;
+    border-left: 3px solid gold;
+}
