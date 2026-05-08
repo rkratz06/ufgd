@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en-us">
+	<head>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<link rel="stylesheet" href="style.css"/>
+	</head>
+	<body>
+        <nav class="navbar">
+            <div>
+                <a href="/"><img src="logo.png" href="/"></a>
+            </div>
+            <div class="nav-links">
+                <a href="/list.html">List</a>
+                <a href="/leaderboard.html">Leaderboard</a>
+                <a href="/levels.html">Levels</a>
+                <a href="/FAQ.html">FAQ</a>
+            </div>
+        </nav>
+        <div id="list-panel"></div>
+        <script>
+let playersCache = [];
+
+async function loadPlayers() {
+
+    try {
+
+        const res =
+            await fetch("/players");
+
+        playersCache =
+            await res.json();
+
+        const listPanel =
+            document.getElementById("list-panel");
+
+        listPanel.innerHTML = "";
+
+        playersCache.forEach((player, index) => {
+
+            const div =
+                document.createElement("div");
+
+            div.className = "list-item";
+
+            div.innerText =
+                `${index + 1}. ${player.name} — ${player.cumulative_points.toFixed(2)} pts`;
+
+            listPanel.appendChild(div);
+        });
+
+    } catch (error) {
+
+        console.error(error);
+    }
+}
+
+loadPlayers();
+        </script>
+	</body>
+</html>

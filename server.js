@@ -3,10 +3,9 @@ const express = require("express");
 const {
     insertLevel,
     addVictorByName,
-    deleteLevel,
-    moveEntry,
     getEntryByPosition,
-    getTopEntries
+    getTopEntries,
+    getPlayers
 } = require("./database");
 
 const app = express();
@@ -103,6 +102,16 @@ app.put("/levels/move", (req, res) => {
         res.json({ message: "Moved" });
     });
 });
+
+//get players
+app.get("/players", (req, res) => {
+    getPlayers((err, rows) => {
+
+        if (err) return res.status(500).json({ error: err.message });
+
+        res.json(rows);
+    });
+})
 
 /* =========================
    START SERVER

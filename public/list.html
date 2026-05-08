@@ -9,16 +9,17 @@
 
 <body class="list-page">
 
-<nav class="navbar">
-    <div class="logo">UFGD</div>
-
-    <div class="nav-links">
-        <a href="/">Home</a>
-        <a href="/list.html">List</a>
-        <a href="/levels.html">Levels</a>
-        <a href="/FAQ.html">FAQ</a>
-    </div>
-</nav>
+        <nav class="navbar">
+            <div>
+                <a href="/"><img src="logo.png" href="/"></a>
+            </div>
+            <div class="nav-links">
+                <a href="/list.html">List</a>
+                <a href="/leaderboard.html">Leaderboard</a>
+                <a href="/levels.html">Levels</a>
+                <a href="/FAQ.html">FAQ</a>
+            </div>
+        </nav>
 
 <div class="list-container">
 
@@ -41,75 +42,118 @@ let levelsCache = [];
 ========================= */
 async function loadLevels() {
 
-    const res =
-        await fetch("/levels?limit=100");
+    try {
 
-    levelsCache =
-        await res.json();
+        const res =
+            await fetch("/levels?limit=100");
 
-    const listPanel =
-        document.getElementById("list-panel");
+        levelsCache =
+            await res.json();
 
-    listPanel.innerHTML = "";
+        const listPanel =
+            document.getElementById("list-panel");
 
-    levelsCache.forEach(level => {
+        listPanel.innerHTML = "";
 
-        const div =
-            document.createElement("div");
+        levelsCache.forEach(level => {
 
-        div.className = "list-item";
+            const div =
+                document.createElement("div");
 
-        div.innerText =
-            `${level.position}. ${level.name}`;
+            div.className = "list-item";
 
-        div.onclick =
-            () => showDetails(level, div);
+            div.innerText =
+                `${level.position}. ${level.name}`;
 
-        listPanel.appendChild(div);
-    });
+            div.onclick =
+                () => showDetails(
+                    level.position,
+                    div
+                );
+
+            listPanel.appendChild(div);
+        });
+
+    } catch (error) {
+
+        console.error(error);
+    }
 }
 
 /* =========================
    SHOW DETAILS
 ========================= */
-function showDetails(level, element) {
+async function showDetails(
+    position,
+    element
+) {
 
-    // highlight active
-    document.querySelectorAll(".list-item")
-        .forEach(el => el.classList.remove("active"));
+    try {
 
-    element.classList.add("active");
+        // active highlight
+        document
+            .querySelectorAll(".list-item")
+            .forEach(el =>
+                el.classList.remove("active")
+            );
 
-    const panel =
-        document.getElementById("detail-panel");
+        element.classList.add("active");
 
-    panel.innerHTML = `
-        <div class="title">${level.name}</div>
+        // fetch full level info
+        const res =
+            await fetch(`/levels/${position}`);
 
-        <div class="sub">
-            Position: ${level.position} <br>
-            Points: ${level.points.toFixed(2)}
-        </div>
+        const level =
+            await res.json();
 
-        <div class="box">
-            <strong>Victors</strong><br><br>
-            ${
-                level.victors.length
-                ? level.victors.join(", ")
-                : "None yet"
-            }
-        </div>
+        const panel =
+            document.getElementById(
+                "detail-panel"
+            );
 
-        <div class="box">
-            <strong>Future Info Section</strong><br>
-            (You can expand this later with stats, history, etc.)
-        </div>
-    `;
+        panel.innerHTML = `
+            <div class="title">
+                ${level.name}
+            </div>
+
+            <div class="sub">
+                Position: ${level.position}
+                <br>
+
+                Points:
+                ${level.points.toFixed(2)}
+            </div>
+
+            <div class="box">
+                <strong>Victors</strong>
+                <br><br>
+
+                ${
+                    level.victors.length
+                    ? level.victors.join(", ")
+                    : "None yet"
+                }
+            </div>
+
+            <div class="box">
+                <strong>Future Info Section</strong>
+                <br>
+
+                Add records, dates,
+                videos, creators, etc.
+            </div>
+        `;
+
+    } catch (error) {
+
+        console.error(error);
+    }
 }
 
 /* =========================
    INIT
 ========================= */
+
 loadLevels();
 
 </script>

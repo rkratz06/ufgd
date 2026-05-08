@@ -2,24 +2,59 @@ const sqlite3 = require("sqlite3").verbose();
 
 const db = new sqlite3.Database("./data.db");
 
-db.run(`
-CREATE TABLE IF NOT EXISTS levels (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT UNIQUE,
-    position INTEGER UNIQUE,
-    points REAL,
-    victors TEXT
-)
-`);
+/* =========================
+   TABLES
+========================= */
+
+db.serialize(() => {
+
+    db.run(`
+    CREATE TABLE IF NOT EXISTS levels (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT UNIQUE,
+        position INTEGER UNIQUE,
+        points REAL
+    )
+    `);
+
+    db.run(`
+    CREATE TABLE IF NOT EXISTS players (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT UNIQUE,
+        completed_levels INTEGER DEFAULT 0,
+        cumulative_points REAL DEFAULT 0
+    )
+    `);
+
+    db.run(`
+    CREATE TABLE IF NOT EXISTS completions (
+        player_id INTEGER,
+        level_id INTEGER,
+
+        PRIMARY KEY (player_id, level_id),
+
+        FOREIGN KEY(player_id)
+            REFERENCES players(id),
+
+        FOREIGN KEY(level_id)
+            REFERENCES levels(id)
+    )
+    `);
+});
+
+/* =========================
+   POINTS
+========================= */
 
 function calculatePoints(position) {
     return Math.log(100 - position);
 }
 
 /* =========================
-   INSERT
+   INSERT LEVEL
 ========================= */
-function insertLevel(name, position, victors, callback) {
+
+function insertLevel(name, position, callback) {
 
     db.run(
         `UPDATE levels
@@ -27,16 +62,19 @@ function insertLevel(name, position, victors, callback) {
          WHERE position >= ?`,
         [position],
         (err) => {
+
             if (err) return callback(err);
 
-            const points = calculatePoints(position);
+            const points =
+                calculatePoints(position);
 
             db.run(
                 `INSERT INTO levels
-                (name, position, points, victors)
-                VALUES (?, ?, ?, ?)`,
-                [name, position, points, JSON.stringify(victors)],
+                 (name, position, points)
+                 VALUES (?, ?, ?)`,
+                [name, position, points],
                 (err) => {
+
                     if (err) return callback(err);
 
                     recalculateAllPoints();
@@ -48,107 +86,117 @@ function insertLevel(name, position, victors, callback) {
 }
 
 /* =========================
-   RECALCULATE POINTS
+   RECALCULATE
 ========================= */
+
 function recalculateAllPoints() {
 
-    db.all(`SELECT id, position FROM levels`, [], (err, rows) => {
-        if (err) return console.error(err.message);
-
-        rows.forEach(row => {
-            db.run(
-                `UPDATE levels SET points = ? WHERE id = ?`,
-                [calculatePoints(row.position), row.id]
-            );
-        });
-    });
-}
-
-/* =========================
-   GET TOP ENTRIES (FIXED)
-========================= */
-function getTopEntries(limit, callback) {
-
     db.all(
-        `SELECT * FROM levels ORDER BY position ASC LIMIT ?`,
-        [limit],
+        `SELECT id, position FROM levels`,
+        [],
         (err, rows) => {
-            if (err) return callback(err);
 
-            const formatted = rows.map(r => ({
-                ...r,
-                victors: JSON.parse(r.victors || "[]")
-            }));
-
-            callback(null, formatted);
-        }
-    );
-}
-
-/* =========================
-   GET BY POSITION (FIXED)
-========================= */
-function getEntryByPosition(position, callback) {
-
-    db.get(
-        `SELECT * FROM levels WHERE position = ?`,
-        [position],
-        (err, row) => {
-            if (err) return callback(err);
-            if (!row) return callback(null, null);
-
-            row.victors = JSON.parse(row.victors || "[]");
-            callback(null, row);
-        }
-    );
-}
-
-/* =========================
-   ADD VICTOR (FIXED CALLBACK)
-========================= */
-function addVictorByName(name, victor, callback) {
-
-    db.get(
-        `SELECT victors FROM levels WHERE name = ?`,
-        [name],
-        (err, row) => {
-            if (err) return callback(err);
-            if (!row) return callback(new Error("Level not found"));
-
-            let victors = JSON.parse(row.victors || "[]");
-
-            if (!victors.includes(victor)) {
-                victors.push(victor);
+            if (err) {
+                return console.error(err.message);
             }
 
-            db.run(
-                `UPDATE levels SET victors = ? WHERE name = ?`,
-                [JSON.stringify(victors), name],
-                callback
-            );
+            rows.forEach(level => {
+
+                const points =
+                    calculatePoints(level.position);
+
+                db.run(
+                    `UPDATE levels
+                     SET points = ?
+                     WHERE id = ?`,
+                    [points, level.id]
+                );
+            });
         }
     );
 }
 
 /* =========================
-   DELETE
+   ADD VICTOR
 ========================= */
-function deleteLevel(position, callback) {
 
-    db.run(
-        `DELETE FROM levels WHERE position = ?`,
-        [position],
-        (err) => {
+function addVictorByName(
+    levelName,
+    playerName,
+    callback
+) {
+
+    // get level
+    db.get(
+        `SELECT * FROM levels
+         WHERE name = ?`,
+        [levelName],
+        (err, level) => {
+
             if (err) return callback(err);
 
+            if (!level) {
+                return callback(
+                    new Error("Level not found")
+                );
+            }
+
+            // ensure player exists
             db.run(
-                `UPDATE levels SET position = position - 1 WHERE position > ?`,
-                [position],
+                `INSERT OR IGNORE INTO players (name)
+                 VALUES (?)`,
+                [playerName],
                 (err) => {
+
                     if (err) return callback(err);
 
-                    recalculateAllPoints();
-                    callback(null);
+                    // get player
+                    db.get(
+                        `SELECT * FROM players
+                         WHERE name = ?`,
+                        [playerName],
+                        (err, player) => {
+
+                            if (err) {
+                                return callback(err);
+                            }
+
+                            // add completion
+                            db.run(
+                                `INSERT OR IGNORE
+                                 INTO completions
+                                 (player_id, level_id)
+                                 VALUES (?, ?)`,
+                                [
+                                    player.id,
+                                    level.id
+                                ],
+                                (err) => {
+
+                                    if (err) {
+                                        return callback(err);
+                                    }
+
+                                    // update stats
+                                    db.run(
+                                        `UPDATE players
+                                         SET completed_levels =
+                                             completed_levels + 1,
+
+                                             cumulative_points =
+                                             cumulative_points + ?
+
+                                         WHERE id = ?`,
+                                        [
+                                            level.points,
+                                            player.id
+                                        ],
+                                        callback
+                                    );
+                                }
+                            );
+                        }
+                    );
                 }
             );
         }
@@ -156,18 +204,93 @@ function deleteLevel(position, callback) {
 }
 
 /* =========================
-   MOVE (simplified safe version)
+   GET LEVEL
 ========================= */
-function moveEntry(oldPos, newPos, callback) {
 
-    db.run(
-        `UPDATE levels SET position = ? WHERE position = ?`,
-        [newPos, oldPos],
-        (err) => {
+function getEntryByPosition(
+    position,
+    callback
+) {
+
+    db.get(
+        `SELECT * FROM levels
+         WHERE position = ?`,
+        [position],
+        (err, level) => {
+
             if (err) return callback(err);
 
-            recalculateAllPoints();
-            callback(null);
+            if (!level) {
+                return callback(null, null);
+            }
+
+            db.all(
+                `
+                SELECT players.name
+                FROM completions
+
+                JOIN players
+                ON completions.player_id = players.id
+
+                WHERE completions.level_id = ?
+                `,
+                [level.id],
+                (err, victors) => {
+
+                    if (err) {
+                        return callback(err);
+                    }
+
+                    level.victors =
+                        victors.map(v => v.name);
+
+                    callback(null, level);
+                }
+            );
+        }
+    );
+}
+
+/* =========================
+   GET TOP LEVELS
+========================= */
+
+function getTopEntries(
+    limit,
+    callback
+) {
+
+    db.all(
+        `SELECT * FROM levels
+         ORDER BY position ASC
+         LIMIT ?`,
+        [limit],
+        (err, rows) => {
+
+            if (err) return callback(err);
+
+            callback(null, rows);
+        }
+    );
+}
+
+/* =========================
+   GET PLAYERS
+========================= */
+
+function getPlayers(
+    callback
+) {
+
+    db.all(
+        `SELECT * FROM players
+         ORDER BY cumulative_points DESC`,
+         [],
+        (err, rows) => {
+
+            if (err) return callback(err);
+
+            callback(null, rows);
         }
     );
 }
@@ -175,11 +298,11 @@ function moveEntry(oldPos, newPos, callback) {
 /* =========================
    EXPORTS
 ========================= */
+
 module.exports = {
     insertLevel,
     addVictorByName,
-    deleteLevel,
-    moveEntry,
     getEntryByPosition,
-    getTopEntries
+    getTopEntries,
+    getPlayers
 };

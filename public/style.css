@@ -14,21 +14,15 @@ body {
     border-bottom: 2px solid #333;
 }
 
-.logo {
-    font-size: 28px;
-    font-weight: bold;
-    color: gold;
-}
-
 .nav-links {
     display: flex;
-    gap: 20px;
+    gap: 24px;
 }
 
 .nav-links a {
     color: white;
     text-decoration: none;
-    font-size: 18px;
+    font-size: 24px;
     transition: 0.2s;
 }
 
@@ -69,10 +63,18 @@ body {
 }
 
 .list-item {
+    padding: 12px;
     cursor: pointer;
+    border-bottom: 1px solid #2a2a2a;
+    transition: 0.2s;
+}
+
+.list-item:hover {
+    background: #444;
+    border-left: 3px solid gold;
 }
 
 .list-item.active {
-    background: #444;
+    background: #333;
     border-left: 3px solid gold;
 }
